@@ -1,0 +1,10 @@
+per server configs:
+- timezone # high priority
+- custom words/emojis # low priority
+- update channel where messages for each holiday and the requirements are sent
+
+emojis for holidays
+auto update messages: current holiday, required emojis/words
+config command
+
+find how to use emojis in json

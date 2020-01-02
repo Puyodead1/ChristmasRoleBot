@@ -1,0 +1,102 @@
+{
+  "JANUARY": {
+    "HOLIDAY": "NEW_YEARS",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "New Years",
+        "COLOR": 15844367
+      }
+    ],
+    "EMOJIS": ["\uD83C\uDF86", "\uD83C\uDF89", "\uD83C\uDF87", "\uD83E\uDDE8", "\uD83C\uDF88", "\uD83C\uDF8A"],
+    "WORDS": ["new"]
+  },
+  "FEBRUARY": {
+    "HOLIDAY": "VALENTINES",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "Valentines",
+        "COLOR": 14622307
+      }
+    ],
+    "EMOJIS": ["\uD83D\uDE0D", "\uD83C\uDF39", "\uD83D\uDC9D"],
+    "WORDS": ["lovely", "sweet"]
+  },
+  "MARCH": {
+    "HOLIDAY": "ST_PATRICKS",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "St. Patricks",
+        "COLOR": 3066993
+      }
+    ],
+    "EMOJIS": ["\uD83C\uDF40", "\uD83D\uDCB0"],
+    "WORDS": ["lucky"]
+  },
+  "APRIL": {
+    "HOLIDAY": "EASTER",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "Easter",
+        "COLOR": 16777215
+      }
+    ],
+    "EMOJIS": ["\uD83D\uDC30", "\uD83D\uDC07", "\uD83E\uDD5A", "\uD83C\uDF6C", "\uD83E\uDDFA"],
+    "WORDS": [""]
+  },
+  "JULY": {
+    "HOLIDAY": "INDEPENDENCE_DAY",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "Independence Day",
+        "COLOR": 3447003
+      }
+    ],
+    "EMOJIS": ["\uD83C\uDDFA\uD83C\uDDF8", "\uD83C\uDF86", "\uD83E\uDDE8", "\uD83C\uDF87"],
+    "WORDS": ["patriot", "patriotic"]
+  },
+  "OCTOBER": {
+    "HOLIDAY": "HALLOWEEN",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "Spooktober",
+        "COLOR": 15105570
+      }
+    ],
+    "EMOJIS": ["\uD83D\uDC7B", "\uD83C\uDF83"],
+    "WORDS": ["spooky", "scary"]
+  },
+  "NOVEMBER": {
+    "HOLIDAY": "THANKSGIVING",
+    "RANDOM_ROLE": false,
+    "ROLES": [
+      {
+        "NAME": "Thanksgiving",
+        "COLOR": 15105570
+      }
+    ],
+    "EMOJIS": ["\uD83E\uDD83"],
+    "WORDS": ["thankful"]
+  },
+  "DECEMBER": {
+    "HOLIDAY": "CHRISTMAS",
+    "RANDOM_ROLE": true,
+    "ROLES": [
+      {
+        "NAME": "Christmas Red",
+        "COLOR": 16711680
+      },
+      {
+        "NAME": "Christmas Green",
+        "COLOR": 3066993
+      }
+    ],
+    "EMOJIS": ["\uD83E\uDD8C", "\uD83C\uDF81", "\uD83E\uDD36", "\uD83C\uDF85", "\uD83C\uDF84"],
+    "WORDS": ["jolly", "merry", "xmas"]
+  }
+}
