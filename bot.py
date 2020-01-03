@@ -1,7 +1,6 @@
 import random
 import os
 import asyncio
-import dotenv
 import discord
 from datetime import datetime, timedelta
 import json
@@ -10,14 +9,12 @@ import traceback
 from bson.json_util import dumps
 from pymongo import MongoClient
 
-dotenv.load_dotenv()
-
 loop = asyncio.get_event_loop()
 
 client = discord.Client()
 data = json.loads(open("data.json", 'r').read())
 mongo_client = MongoClient(
-    os.getenv("MONGODB_CONNECTION_STRING"))
+    os.environ["MONGODB_CONNECTION_STRING"])
 mongo_db = mongo_client["hrb"]
 mongo_collection = mongo_db["servers"]
 
@@ -524,4 +521,4 @@ class TaskTimer:
         self.task.cancel()
 
 
-client.run(os.getenv("TOKEN"))
+client.run(os.environ["TOKEN"])
