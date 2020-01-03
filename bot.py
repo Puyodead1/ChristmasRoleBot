@@ -5,7 +5,6 @@ import dotenv
 import discord
 from datetime import datetime, timedelta
 import json
-import calendar
 import traceback
 
 from bson.json_util import dumps
