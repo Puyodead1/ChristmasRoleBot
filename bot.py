@@ -6,11 +6,21 @@ import discord
 from datetime import datetime, timedelta
 import json
 import calendar
+import traceback
+
+from bson.json_util import dumps
+from pymongo import MongoClient
+
+dotenv.load_dotenv()
 
 loop = asyncio.get_event_loop()
 
 client = discord.Client()
 data = json.loads(open("data.json", 'r').read())
+mongo_client = MongoClient(
+    os.getenv("MONGODB_CONNECTION_STRING"))
+mongo_db = mongo_client["hrb"]
+mongo_collection = mongo_db["servers"]
 
 
 async def new_holiday_check():
@@ -44,8 +54,7 @@ async def new_holiday_check():
                 print(f"Updated prev role {role.name} for guild {guild.name}")
 
             # handle new month
-            config = json.loads(open("config.json", 'r').read())
-            channel_id = config[str(guild.id)]["CHANNEL_ID"] if config[str(guild.id)] else None
+            channel_id = getServerSettings(guild)["channel_id"]
             if channel_id:
                 channel = guild.get_channel(channel_id)
                 month = getMonth()
@@ -65,8 +74,11 @@ async def new_holiday_check():
                         print(f"Appended role {role.name}")
                     else:
                         # not found, create
-                        role = await create_roles(guild, month_role["NAME"], month_role["COLOR"])
-                        roles.append(role)
+                        try:
+                            role = await create_roles(guild, month_role["NAME"], month_role["COLOR"])
+                            roles.append(role)
+                        except Exception as e:
+                            traceback.print_exc()
 
                 role_format = f"the {roles[0].mention} role" if len(
                     roles) == 1 else f"{','.join([role.mention for role in roles])} roles"
@@ -114,8 +126,7 @@ async def new_holiday_check_guild(message: discord.Message):
             print(f"Updated prev role {role.name} for guild {message.guild.name}")
 
         # handle new month
-        config = json.loads(open("config.json", 'r').read())
-        channel_id = config[str(message.guild.id)]["CHANNEL_ID"] if config[str(message.guild.id)] else None
+        channel_id = getServerSettings(message.guild)["channel_id"]
         if channel_id:
             channel = message.guild.get_channel(channel_id)
             month = getMonth()
@@ -136,8 +147,11 @@ async def new_holiday_check_guild(message: discord.Message):
                 else:
                     # not found, create
                     print("role not found, creating")
-                    role = await create_roles(message.guild, month_role["NAME"], month_role["COLOR"])
-                    roles.append(role)
+                    try:
+                        role = await create_roles(message.guild, month_role["NAME"], month_role["COLOR"])
+                        roles.append(role)
+                    except Exception as e:
+                        traceback.print_exc()
 
             role_format = f"the {roles[0].mention} role" if len(
                 roles) == 1 else f"{','.join([role.mention for role in roles])} roles"
@@ -160,6 +174,20 @@ async def new_holiday_check_guild(message: discord.Message):
 @client.event
 async def on_ready():
     print(f"Logged in as {client.user}, Serving {len(client.guilds)} guilds and {len(client.users)} users!")
+    await client.change_presence(activity=discord.Activity(name="!", type=discord.ActivityType.listening))
+
+    for guild in client.guilds:
+        server = mongo_collection.find_one({"id": guild.id})
+        if not server:
+            guild_payload = {
+                "id": guild.id,
+                "name": guild.name,
+                "failure_notified": False,
+                "channel_id": None
+            }
+            mongo_collection.insert_one(guild_payload)
+            print(f"[MongoDB] Created server document for '{guild.name}' ({guild.id})")
+
     timer = TaskTimer(new_holiday_check)
 
 
@@ -196,31 +224,29 @@ async def on_member_update(before: discord.Member, after: discord.Member):
                 # not found, create
                 print("role not found")
                 try:
-                    role = await after.guild.create_role(name=month_role["NAME"],
-                                                         color=discord.Colour(month_role["COLOR"]))
-                    print(f"Created role {role.name}")
+                    role = await create_roles(after.guild, month_role["NAME"], month_role["COLOR"])
                     roles.append(role)
-                except discord.Forbidden:
-                    try:
-                        await before.guild.owner.send(
-                            "Sorry to bother you but it seems that I am missing permission to create the proper roles!")
-                        print("Missing permission to create roles, owner notified.")
-                    except (discord.Forbidden, discord.HTTPException):
-                        print("Missing permission to create roles, failed to notify owner.")
-                except discord.HTTPException:
-                    try:
-                        await before.guild.owner.send(
-                            "Sorry to bother you but it seems that I failed to create the proper roles!")
-                        print("Failed to create roles, owner notified.")
-                    except (discord.Forbidden, discord.HTTPException):
-                        print("Failed to create roles, failed to notify owner.")
+                except Exception as e:
+                    traceback.print_exc()
 
-        # add roles to member
-        await addRole(after, roles, use_random_role)
+        if None not in roles:
+            # add role
+            await addRole(after, roles, use_random_role)
 
 
 @client.event
 async def on_guild_join(guild: discord.Guild):
+    server = mongo_collection.find_one({"id": guild.id})
+    if not server:
+        guild_payload = {
+            "id": guild.id,
+            "name": guild.name,
+            "failure_notified": False,
+            "channel_id": None
+        }
+        mongo_collection.insert_one(guild_payload)
+        print(f"[MongoDB] Created server document for '{guild.name}' ({guild.id})")
+
     month = getMonth()
     month_data = data[month]
     month_roles = month_data["ROLES"]
@@ -228,8 +254,11 @@ async def on_guild_join(guild: discord.Guild):
     for month_role in month_roles:
         if not month_role["NAME"] in [role.name for role in guild.roles]:
             # not found, create
-            print("role not found, creating")
-            await create_roles(guild, month_role["NAME"], month_role["COLOR"])
+            try:
+                await create_roles(guild, month_role["NAME"], month_role["COLOR"])
+            except Exception as e:
+                traceback.print_exc()
+                return
 
 
 @client.event
@@ -257,13 +286,7 @@ async def on_message(message):
             return await message.channel.send("too many or not enough args")
         channel = client.get_channel(int(args[0]))
         if channel:
-            config = json.loads(open("config.json", 'r').read())
-            config[message.guild.id] = {
-                "CHANNEL_ID": channel.id
-            }
-            file = open("config.json", 'w')
-            file.write(json.dumps(config))
-            file.close()
+            update(message.guild, "channel_id", int(args[0]))
             print("config updated")
             return await message.channel.send(f"Channel set to {channel.mention}")
         else:
@@ -291,28 +314,30 @@ async def on_message(message):
                 print(f"Appended role {role.name}")
             else:
                 # not found, create
-                print("role not found, creating")
-                role = await create_roles(message.guild, month_role["NAME"], month_role["COLOR"])
-                print(role.id)
-                print(role.name)
-                roles.append(role)
-                print(f"Appended role {role.name}")
+                try:
+                    role = await create_roles(message.guild, month_role["NAME"], month_role["COLOR"])
+                    roles.append(role)
+                except Exception as e:
+                    traceback.print_exc()
+                    break
 
-        role_format = f"the {roles[0].mention} role" if len(
-            roles) == 1 else f"{','.join([role.mention for role in roles])} roles"
+        if None not in roles:
+            role_format = f"the {roles[0].mention} role" if len(
+                roles) == 1 else f"{','.join([role.mention for role in roles])} roles"
 
-        embed = discord.Embed(title=f"New Holiday: ``{holiday}``",
-                              description=f"Hello! It's a new month and there is a new holiday role available!\n\nServer nicknames must include one of the following:\nEmojis: ``{','.join(emojis)}``\nor\nWords: ``{','.join(words)}``\n\nYou can gain {role_format} for {getYear()}!\n\n*Remember: These roles are permanent and cannot be changed!*",
-                              color=discord.Color.red(), timestamp=datetime.utcnow())
-        embed.set_footer(text=client.user.display_name)
+            embed = discord.Embed(title=f"New Holiday: ``{holiday}``",
+                                  description=f"Hello! It's a new month and there is a new holiday role available!\n\nServer nicknames must include one of the following:\nEmojis: ``{','.join(emojis)}``\nor\nWords: ``{','.join(words)}``\n\nYou can gain {role_format} for {getYear()}!\n\n*Remember: These roles are permanent and cannot be changed!*",
+                                  color=discord.Color.red(), timestamp=datetime.utcnow())
+            embed.set_footer(text=client.user.display_name)
+        else:
+            await message.channel.send("There was an error and the roles couldn't be found or created!")
 
     if command.lower() == "resendlatest":
         if not len(args) == 0:
             return await message.channel.send("too many or not enough args")
 
         await message.channel.send("Resending latest holiday message!")
-        config = json.loads(open("config.json", 'r').read())
-        channel_id = config[str(message.guild.id)]["CHANNEL_ID"] if config[str(message.guild.id)] else None
+        channel_id = getServerSettings(message.guild)["channel_id"]
         if channel_id:
             channel = message.guild.get_channel(channel_id)
             month = getMonth()
@@ -333,26 +358,31 @@ async def on_message(message):
                 else:
                     # not found, create
                     print("role not found, creating")
-                    role = await create_roles(message.guild, month_role["NAME"], month_role["COLOR"])
-                    print(role.id)
-                    print(role.name)
-                    roles.append(role)
-                    print(f"Appended role {role.name}")
+                    try:
+                        role = await create_roles(message.guild, month_role["NAME"], month_role["COLOR"])
+                        roles.append(role)
+                    except Exception as e:
+                        traceback.print_exc()
 
-            role_format = f"the {roles[0].mention} role" if len(
-                roles) == 1 else f"{','.join([role.mention for role in roles])} roles"
+            if None not in roles:
+                role_format = f"the {roles[0].mention} role" if len(
+                    roles) == 1 else f"{','.join([role.mention for role in roles])} roles"
 
-            embed = discord.Embed(title=f"New Holiday: ``{holiday}``",
-                                  description=f"Hello! It's a new month and there is a new holiday role available!\n\nServer nicknames must include one of the following:\nEmojis: ``{','.join(emojis)}``\nor\nWords: ``{','.join(words)}``\n\nYou can gain {role_format} for {getYear()}!\n\n*Remember: These roles are permanent and cannot be changed!*",
-                                  color=discord.Color.red(), timestamp=datetime.utcnow())
-            embed.set_footer(text=client.user.display_name)
+                embed = discord.Embed(title=f"New Holiday: ``{holiday}``",
+                                      description=f"Hello! It's a new month and there is a new holiday role available!\n\nServer nicknames must include one of the following:\nEmojis: ``{','.join(emojis)}``\nor\nWords: ``{','.join(words)}``\n\nYou can gain {role_format} for {getYear()}!\n\n*Remember: These roles are permanent and cannot be changed!*",
+                                      color=discord.Color.red(), timestamp=datetime.utcnow())
+                embed.set_footer(text=client.user.display_name)
 
-            try:
-                await channel.send(content=None, embed=embed)
-            except discord.Forbidden:
-                await message.channel.send(f"Missing permissions to send message! Channel: {channel.mention}")
-            except discord.HTTPException:
-                await message.channel.send(f"Failed to send message! Channel: {channel.mention}")
+                try:
+                    await channel.send(content=None, embed=embed)
+                except discord.Forbidden:
+                    await message.channel.send(f"Missing permissions to send message! Channel: {channel.mention}")
+                except discord.HTTPException:
+                    await message.channel.send(f"Failed to send message! Channel: {channel.mention}")
+            else:
+                await message.channel.send("Roles not found or could not be created.")
+        else:
+            await message.channel.send("No update channel set! Use force update if you want to continue without an update channel")
 
     if command.lower() == "help":
         if not len(args) == 0:
@@ -364,9 +394,9 @@ async def on_message(message):
     if command.lower() == "leaveguild" and message.author.id == 213247101314924545:
         if not len(args) == 1:
             return await message.channel.send("too many or not enough args")
-        guild = client.get_guild(args[0])
+        guild = client.get_guild(int(args[0]))
+        await message.channel.send("Leaving...")
         await guild.leave()
-        await message.channel.send("Guild left!")
 
     if command.lower() == "guilds" and message.author.id == 213247101314924545:
         if not len(args) == 0:
@@ -444,19 +474,40 @@ async def create_roles(guild: discord.Guild, name: str, color: int):
         print(f"Created role {role.name}")
         return role
     except discord.Forbidden:
-        try:
-            await guild.owner.send(
-                "Sorry to bother you but it seems that I am missing permission to create the proper roles!")
-            print("Missing permission to create roles, owner notified.")
-        except (discord.Forbidden, discord.HTTPException):
-            print("Missing permission to create roles, failed to notify owner.")
+        server_settings = getServerSettings(guild)
+        if not server_settings["failure_notified"]:
+            try:
+                await guild.owner.send(
+                    "Sorry to bother you but it seems that I am missing permission to create the proper roles! This is the only message you will receive regarding this!")
+                print("Missing permission to create roles, owner notified.")
+                update(guild, "failure_notified", True)
+                print("config updated with notified boolean")
+            except (discord.Forbidden, discord.HTTPException):
+                print("Missing permission to create roles, failed to notify owner.")
+        else:
+            print("Missing permission to create roles, not notifying owner")
     except discord.HTTPException:
-        try:
-            await guild.owner.send(
-                "Sorry to bother you but it seems that I failed to create the proper roles!")
-            print("Failed to create roles, owner notified.")
-        except (discord.Forbidden, discord.HTTPException):
-            print("Failed to create roles, failed to notify owner.")
+        server_settings = getServerSettings(guild)
+        if not server_settings["failure_notified"]:
+            try:
+                await guild.owner.send(
+                    "Sorry to bother you but it seems that I failed to create the proper roles! This is the only message you will receive regarding this!")
+                print("Failed to create roles, owner notified.")
+                update(guild, "failure_notified", True)
+                print("config updated with notified boolean")
+            except (discord.Forbidden, discord.HTTPException):
+                print("Failed to create roles, failed to notify owner.")
+        else:
+            print("Failed to create roles, not notifying owner")
+
+
+def getServerSettings(guild):
+    document = mongo_collection.find_one({"id": guild.id})
+    return json.loads(dumps(document))
+
+
+def update(guild, key, value):
+    mongo_collection.update_one({"id": guild.id}, {"$set": {key: value}})
 
 
 class TaskTimer:
@@ -473,8 +524,5 @@ class TaskTimer:
     def cancel(self):
         self.task.cancel()
 
-
-if __name__ == "__main__":
-    dotenv.load_dotenv()
 
 client.run(os.getenv("TOKEN"))
